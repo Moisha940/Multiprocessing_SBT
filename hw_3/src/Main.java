@@ -1,58 +1,38 @@
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Main {
+        private static final Lock lock = new ReentrantLock();
+        private static final Condition pingCondition = lock.newCondition();
+        private static final Condition pongCondition = lock.newCondition();
+        private static int iteration = 0;
+        private static boolean isPing = true;
 
-    private static volatile boolean pingTurn = true;
-    private static final Object lock = new Object();
-    private static final AtomicInteger iteration = new AtomicInteger(1);
-
-    public static void main(String[] args) {
-        int numberOfIterations = 10;
-
-        Thread pingThread = new Thread(() -> {
-            while (iteration.get() <= numberOfIterations) {
-                synchronized (lock) {
-                    if (pingTurn) {
-                        System.out.println("PING: " + iteration.getAndIncrement());
-                        pingTurn = false;
-                        lock.notify();
-                    } else {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
+        public static void main(String[] args) {
+            Thread thread1 = new Thread(() -> {
+                while (true) {
+                    lock.lock();
+                    try {
+                        while (!isPing) {
+                            pingCondition.await();
                         }
+                        System.out.println("PING #" + ++iteration);
+                        isPing = false;
+                        pongCondition.signal();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    } finally {
+                        lock.unlock();
                     }
                 }
-            }
-        });
+            });
 
-        Thread pongThread = new Thread(() -> {
-            while (iteration.get() <= 10) {
-                synchronized (lock) {
-                    if (!pingTurn) {
-                        System.out.println("PONG: " + iteration.getAndIncrement());
-                        pingTurn = true;
-                        lock.notify();
-                    } else {
-                        try {
-                            lock.wait();
-                        } catch (InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-            }
-        });
+            Thread thread2 = new Thread(() -> {
 
-        pingThread.start();
-        pongThread.start();
+            });
 
-        try {
-            pingThread.join();
-            pongThread.join();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            thread1.start();
+            thread2.start();
         }
     }
-}
